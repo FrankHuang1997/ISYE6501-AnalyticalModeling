@@ -1,0 +1,299 @@
+---
+title: "hw5"
+author: "Chengqi"
+date: "2019/9/20"
+output: html_document
+---
+
+**Question 8.1**
+===================  
+Describe a situation or problem from your job, everyday life, current events, etc., for which a linear regression model would be appropriate. List some (up to 5) predictors that you might use.
+
+**\textcolor{red}{Answer}**  
+
+Suppose we are in charge of a Tesla manufacture plant, we may want to predict the sales of a model of Tesla next month. In this case, linear regression model can be an appropriate to analyze how different predictors influence sales. 
+We plan to set these predictors: the price of this model of Tesla(x1), the acceleration performance of this model(x2), the cruising range(x3), and the price level of fossil oil(x4). Each predictor do not look correlated, the data for each predictor is pretty easy to collect as well. We can build a linear regression model just like this:
+$$Sales=a_0+a_1*x_1+a_2*x_2+a_3*x_3+a_4*x_4$$
+Among the 4 predictors, the acceleration performance and the cruising range may have certain trends. We may need to de-trend these data in order to get better result.
+
+\pagebreak
+
+**Question 8.2**  
+=================== 
+Using crime data from http://www.statsci.org/data/general/uscrime.txt  (file uscrime.txt, description at http://www.statsci.org/data/general/uscrime.html ), use regression (a useful R function is lm or glm) to predict the observed crime rate in a city with the following data:
+Show your model (factors used and their coefficients), the software output, and the quality of fit. 
+Note that because there are only 47 data points and 15 predictors, you’ll probably notice some overfitting.  We’ll see ways of dealing with this sort of problem later in the course.
+
+We start with loading the data. Since it is unclear we should use which combination of predictors, the best way maybe to set all attributes as predictors to see how the model fits:
+```{r}
+data1=read.table('C:\\Users\\huangchengqi\\Desktop\\MS SCE\\19Fall\\ISYE6501\\hw5\\data 8.2\\uscrime.txt',header=TRUE)
+#use the whole data set to do linear regression.
+model1 <- lm(Crime~., data1)
+test_data_set <-data.frame(M = 14,So = 0, Ed = 10.0, Po1 = 12.0, Po2 = 15.5,LF = 0.64, M.F = 94.0, Pop = 150, NW = 1.1, U1 = 0.12, U2 = 3.6, Wealth = 3200, Ineq = 20.1, Prob = 0.040, Time = 39.0)
+pred <- predict(model1, test_data_set)
+summary(model1)
+pred
+```
+
+
+
+
+The result is so small as the former data shows number of crimes was at least 342 in a single state. So we suppose there must be some over fitting in our model. The predictors cannot be the all the attributes listed, as some of the attributes may have a certain correlation with one another. Others may be irrelevant to predict the number of crimes. 
+First we want to see if there's correlated predictors:
+```{r}
+#First we check the value of vif to see if some predictors are correlated. 
+library(car)
+vif(model1)
+cor(data1[,4],data1[,5])
+plot(x=data1[,4],y=data1[,5])
+```
+The vif refers to variance-inflation factors. In general, if the vif value of a certain predictor is more than 10, we can say it has such correlation problem. It seems Po1 and Po2 has extremely high vif. We check the discription of the data, it shows Po1		means per capita expenditure on police protection in 1960, while Po2	means	per capita expenditure on police protection in 1959. So there's no doubt these to predictors are correlated. In order to diminish such effect, and to keep the feature of these 2 predictors, we introduce V17=(Po1+Po2)/2.
+```{r}
+data2 <- data1
+data2[,17] <- (data1[,4]+data1[,5])/2
+model2 <- lm( Crime ~  M + So + Ed + M.F + Pop + NW + U1 + U2+ Wealth + Ineq + Prob + Time + V17, data = data2)
+test_data_set2 <-data.frame(M = 14,So = 0, Ed = 10.0,LF = 0.64, M.F = 94.0, Pop = 150,  NW = 1.1, U1 = 0.12, U2 = 3.6, Wealth = 3200, Ineq = 20.1, Prob = 0.040, Time = 39.0, V17=18.75 )
+pred2<- predict(model2, test_data_set2)
+summary(model2)
+vif(model2)
+```
+Now the correlation issue seems to be ok. However, we still need to see if some of the predictors are irrelevant to predict number of crimes. We should then look at the p-value and identify irrelavent attributes.it seems So, pop, NW, wealth are irrelavant attributes because the P-value is so large. So we get rid of these predictors and try to fit the model again.
+```{r}
+model3 <- lm( Crime ~  M + Ed + M.F + U1 + U2 + Ineq + Prob + V17, data = data2)
+test_data_set3 <-data.frame(M = 14, Ed = 10.0, M.F = 94.0, U1 = 0.12, U2 = 3.6, Ineq = 20.1, Prob = 0.040, V17=18.75)
+pred3 <- predict(model3,test_data_set3,interval='predict',level=0.99)
+summary(model3)
+pred3
+
+```
+The predictive value is 1777.847. It looks like a resonable result. 
+The regression model is：
+Crime = -6541.18+92.5M+17.75Ed+23.83M.F-6293.91U1+192.57U2+61.80Ineq-3858.65Prob+105.56/2(P1+P2)
+
+We then use stepwise method to remove predictors from model1 in order to find a model with lowest AICc.
+```{r, include=FALSE}
+stepAICc <- function (object, scope, scale = 0, direction = c("both", "backward", 
+  "forward"), trace = 1, keep = NULL, steps = 1000, use.start = FALSE, 
+  k = 2, ...) 
+{
+  mydeviance <- function(x, ...) {
+    dev <- deviance(x)
+    if (!is.null(dev)) 
+      dev
+    else MuMIn::AICc(x, k=0)
+  }
+  cut.string <- function(string) {
+    if (length(string) > 1L) 
+      string[-1L] <- paste("\n", string[-1L], sep = "")
+    string
+  }
+  re.arrange <- function(keep) {
+    namr <- names(k1 <- keep[[1L]])
+    namc <- names(keep)
+    nc <- length(keep)
+    nr <- length(k1)
+    array(unlist(keep, recursive = FALSE), c(nr, nc), list(namr, 
+      namc))
+  }
+  step.results <- function(models, fit, object, usingCp = FALSE) {
+    change <- sapply(models, "[[", "change")
+    rd <- sapply(models, "[[", "deviance")
+    dd <- c(NA, abs(diff(rd)))
+    rdf <- sapply(models, "[[", "df.resid")
+    ddf <- c(NA, abs(diff(rdf)))
+    AIC <- sapply(models, "[[", "AIC")
+    heading <- c("Stepwise Model Path \nAnalysis of Deviance Table", 
+      "\nInitial Model:", deparse(formula(object)), "\nFinal Model:", 
+      deparse(formula(fit)), "\n")
+    aod <- if (usingCp) 
+      data.frame(Step = change, Df = ddf, Deviance = dd, 
+        `Resid. Df` = rdf, `Resid. Dev` = rd, Cp = AIC, 
+        check.names = FALSE)
+    else data.frame(Step = change, Df = ddf, Deviance = dd, 
+      `Resid. Df` = rdf, `Resid. Dev` = rd, AIC = AIC, 
+      check.names = FALSE)
+    attr(aod, "heading") <- heading
+    class(aod) <- c("Anova", "data.frame")
+    fit$anova <- aod
+    fit
+  }
+  Terms <- terms(object)
+  object$formula <- Terms
+  if (inherits(object, "lme")) 
+    object$call$fixed <- Terms
+  else if (inherits(object, "gls")) 
+    object$call$model <- Terms
+  else object$call$formula <- Terms
+  if (use.start) 
+    warning("'use.start' cannot be used with R's version of 'glm'")
+  md <- missing(direction)
+  direction <- match.arg(direction)
+  backward <- direction == "both" | direction == "backward"
+  forward <- direction == "both" | direction == "forward"
+  if (missing(scope)) {
+    fdrop <- numeric()
+    fadd <- attr(Terms, "factors")
+    if (md) 
+      forward <- FALSE
+  }
+  else {
+    if (is.list(scope)) {
+      fdrop <- if (!is.null(fdrop <- scope$lower)) 
+        attr(terms(update.formula(object, fdrop)), "factors")
+      else numeric()
+      fadd <- if (!is.null(fadd <- scope$upper)) 
+        attr(terms(update.formula(object, fadd)), "factors")
+    }
+    else {
+      fadd <- if (!is.null(fadd <- scope)) 
+        attr(terms(update.formula(object, scope)), "factors")
+      fdrop <- numeric()
+    }
+  }
+  models <- vector("list", steps)
+  if (!is.null(keep)) 
+    keep.list <- vector("list", steps)
+  n <- nobs(object, use.fallback = TRUE)
+  fit <- object
+  bAIC <- extractAIC(fit, scale, k = k, ...)
+  edf <- bAIC[1L]
+  bAIC <- MuMIn::AICc(fit, k=k)
+  if (is.na(bAIC)) 
+    stop("AIC is not defined for this model, so 'stepAIC' cannot proceed")
+  if (bAIC == -Inf) 
+    stop("AIC is -infinity for this model, so 'stepAIC' cannot proceed")
+  nm <- 1
+  Terms <- terms(fit)
+  if (trace) {
+    cat("Start:  AIC=", format(round(bAIC, 2)), "\n", cut.string(deparse(formula(fit))), 
+      "\n\n", sep = "")
+    utils::flush.console()
+  }
+  models[[nm]] <- list(deviance = mydeviance(fit), df.resid = n - 
+    edf, change = "", AIC = bAIC)
+  if (!is.null(keep)) 
+    keep.list[[nm]] <- keep(fit, bAIC)
+  usingCp <- FALSE
+  while (steps > 0) {
+    steps <- steps - 1
+    AIC <- bAIC
+    ffac <- attr(Terms, "factors")
+    if (!is.null(sp <- attr(Terms, "specials")) && !is.null(st <- sp$strata)) 
+      ffac <- ffac[-st, ]
+    scope <- factor.scope(ffac, list(add = fadd, drop = fdrop))
+    aod <- NULL
+    change <- NULL
+    if (backward && length(scope$drop)) {
+      aod <- dropterm(fit, scope$drop, scale = scale, 
+        trace = max(0, trace - 1), k = k, ...)
+      rn <- row.names(aod)
+      row.names(aod) <- c(rn[1L], paste("-", rn[-1L], 
+        sep = " "))
+      if (any(aod$Df == 0, na.rm = TRUE)) {
+        zdf <- aod$Df == 0 & !is.na(aod$Df)
+        nc <- match(c("Cp", "AIC"), names(aod))
+        nc <- nc[!is.na(nc)][1L]
+        ch <- abs(aod[zdf, nc] - aod[1, nc]) > 0.01
+        if (any(is.finite(ch) & ch)) {
+          warning("0 df terms are changing AIC")
+          zdf <- zdf[!ch]
+        }
+        if (length(zdf) > 0L) 
+          change <- rev(rownames(aod)[zdf])[1L]
+      }
+    }
+    if (is.null(change)) {
+      if (forward && length(scope$add)) {
+        aodf <- addterm(fit, scope$add, scale = scale, 
+          trace = max(0, trace - 1), k = k, ...)
+        rn <- row.names(aodf)
+        row.names(aodf) <- c(rn[1L], paste("+", rn[-1L], 
+          sep = " "))
+        aod <- if (is.null(aod)) 
+          aodf
+        else rbind(aod, aodf[-1, , drop = FALSE])
+      }
+      attr(aod, "heading") <- NULL
+      if (is.null(aod) || ncol(aod) == 0) 
+        break
+      nzdf <- if (!is.null(aod$Df)) 
+        aod$Df != 0 | is.na(aod$Df)
+      aod <- aod[nzdf, ]
+      if (is.null(aod) || ncol(aod) == 0) 
+        break
+      nc <- match(c("Cp", "AIC"), names(aod))
+      nc <- nc[!is.na(nc)][1L]
+      o <- order(aod[, nc])
+      if (trace) {
+        print(aod[o, ])
+        utils::flush.console()
+      }
+      if (o[1L] == 1) 
+        break
+      change <- rownames(aod)[o[1L]]
+    }
+    usingCp <- match("Cp", names(aod), 0) > 0
+    fit <- update(fit, paste("~ .", change), evaluate = FALSE)
+    fit <- eval.parent(fit)
+    nnew <- nobs(fit, use.fallback = TRUE)
+    if (all(is.finite(c(n, nnew))) && nnew != n) 
+      stop("number of rows in use has changed: remove missing values?")
+    Terms <- terms(fit)
+    bAIC <- extractAIC(fit, scale, k = k, ...)
+    edf <- bAIC[1L]
+    bAIC <- MuMIn::AICc(fit, k=k)
+    if (trace) {
+      cat("\nStep:  AIC=", format(round(bAIC, 2)), "\n", 
+        cut.string(deparse(formula(fit))), "\n\n", sep = "")
+      utils::flush.console()
+    }
+    if (bAIC >= AIC + 1e-07) 
+      break
+    nm <- nm + 1
+    models[[nm]] <- list(deviance = mydeviance(fit), df.resid = n - 
+      edf, change = change, AIC = bAIC)
+    if (!is.null(keep)) 
+      keep.list[[nm]] <- keep(fit, bAIC)
+  }
+  if (!is.null(keep)) 
+    fit$keep <- re.arrange(keep.list[seq(nm)])
+  step.results(models = models[seq(nm)], fit, object, usingCp)
+}
+```
+
+```{r}
+library(MuMIn)
+library(MASS)
+model <- lm(Crime~., data=data1)
+stepAICc(model,direction='both', steps=1000)
+```
+
+Then we choose the model with best AICc as model4.lm(formula = Crime ~ M + Ed + Po1 + M.F + U1 + U2 + Ineq + Prob, data = data1):
+```{r}    
+model4 <-lm(Crime ~ M + Ed + Po1 + M.F + U1 + U2 + Ineq + Prob, data = data1)
+pred4 <- predict(model4,test_data_set,interval='predict',level=0.99)
+summary(model4)
+plot(model4)
+
+```
+
+Comparing model3 and model4, we can see that
+Model3:
+Residual standard error: 198 on 38 degrees of freedom
+Multiple R-squared:  0.7834,	Adjusted R-squared:  0.7378 
+F-statistic: 17.18 on 8 and 38 DF,  p-value: 1.842e-10
+Model4:
+Residual standard error: 195.5 on 38 degrees of freedom
+Multiple R-squared:  0.7888,	Adjusted R-squared:  0.7444 
+F-statistic: 17.74 on 8 and 38 DF,  p-value: 1.159e-10
+Comparing the adjusted R-squred and F-statistic values, model4 is more likely to be a better model. 
+The Chosen model is:
+Crime=-6426.10+93.32M+180.12Ed+102.65Po1+22.34M.F-6086.631U1+187.35U2+61.33Ineq-3796.03Prob
+
+The predictive value is 1038.
+
+```{r}
+pred4
+
+```
+
