@@ -1,0 +1,15 @@
+library('kknn')
+library('lattice')
+library('ggplot2')
+library('caret')
+data1=read.table('C:\\Users\\huangchengqi\\Desktop\\MS SCE\\19Fall\\ISYE6501\\hw1\\credit_card_data-headers.txt',header=TRUE)
+data = data.matrix(data1)
+set.seed(99)
+folds=createFolds(data,k=10)
+str(folds)
+cv_results=lapply(folds,function(x){
+  train=data[-x,]
+  test=data[x,]
+  model <- kknn(R1~.,train,test,k=7,distance=1,scale=TRUE,kernel ="triangular")
+})
+
