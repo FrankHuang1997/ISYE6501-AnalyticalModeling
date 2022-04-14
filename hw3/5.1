@@ -1,8 +1,0 @@
-library(outliers)
-raw_data <- read.table('C:\\Users\\huangchengqi\\Desktop\\MS SCE\\19Fall\\ISYE6501\\hw3\\data 5.1\\uscrime.txt',header=TRUE)
-data <- raw_data[,12]
-
-plot(c(1:47),data,type='l')
-
-model <- grubbs.test(data,type=10,opposite=FALSE,two.sided=TRUE)
-model_2 <- grubbs.test(data,type=20)
